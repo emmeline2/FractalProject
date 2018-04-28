@@ -1,0 +1,179 @@
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.Polygon;
+import java.awt.geom.Path2D;
+import java.awt.geom.Point2D;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Random;
+import java.util.Timer;
+import java.util.concurrent.*; 
+
+
+import javax.swing.JFrame;
+import javax.swing.JPanel;
+import javax.swing.OverlayLayout;
+
+//shared resources 
+	class Shared 
+	{
+	    static double avg = 0;
+	    static int count = 0; 
+	}
+
+public class FractalGraphics{
+
+	public static final int STAGES = 8;
+
+
+	public static void main(String[] args) {
+		final int level = STAGES;
+		double base = 1100;
+		Semaphore sem = new Semaphore(1); 
+		//double finalAverage = 0; 
+		
+
+		JFrame frame = new JFrame("Fractal Display");
+ 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+ 		
+
+		JPanel panel = new JPanel() {
+			@Override
+			public void paintComponent(Graphics g) {
+				 super.paintComponent(g);
+				g.setColor(new Color(0, 0, 255));
+
+				FractalThread f1 = new FractalThread(level, 20.0, 20.0, base, ((Graphics2D)g), sem);
+				f1.start();
+
+
+				while(f1.isAlive()) {
+ 				}
+				 
+			}
+			
+		};
+
+		panel.setPreferredSize(new Dimension(1200, 1200));
+		frame.add(panel);
+		frame.pack();
+		frame.setResizable(false);
+		frame.setLocationRelativeTo(null);
+		frame.setVisible(true);
+		
+	}
+
+
+	public static void displayFractals(int level, double x, double y, double base, Graphics2D g, Semaphore sem) {
+		if(level <= 0) {
+			return;
+		}
+		else {	
+			Path2D p = new Path2D.Double();
+			p.moveTo(x, y);
+			p.lineTo(x + base, y);
+			p.lineTo(x, y + base);
+			p.lineTo(x, y);
+						
+
+			g.setColor(new Color(
+					0,
+					0, //(0 + ((255 / stages)*level)),
+					(0 + ((255 / STAGES)*level))));
+
+			g.fill(p);
+
+
+			//calc area
+			
+			//wait 
+
+
+			if(level == STAGES) {
+				FractalThread fsub1 = new FractalThread(level-1, x, y, (base/2), g, sem); //top right
+				fsub1.start();
+
+				FractalThread fsub2 = new FractalThread(level-1,  x + (base/2), y, (base/2), g, sem);//top left
+				fsub2.start();
+
+     			FractalThread fsub3 = new FractalThread(level-1, x, y + (base/2), (base/2), g, sem);//bottom
+				fsub3.start();
+
+				while(fsub3.isAlive()){
+				}
+
+				while(fsub2.isAlive()) {
+				}
+
+				while(fsub1.isAlive()) {
+				}
+			}
+
+			else {
+				displayFractals(level-1, x, y, (base/2), g, sem); //top right
+				displayFractals(level-1, x + (base/2), y, (base/2), g, sem); //top left
+				displayFractals(level-1, x, y + (base/2), (base/2), g, sem); //bottom
+			}
+			 
+			return;
+		}
+	}
+}
+
+
+
+class FractalThread extends Thread  {
+	private int level;
+	private double x;
+	private double y;
+	private double base;
+	public Graphics2D g;
+	public Semaphore sem; 
+
+
+	public FractalThread(int level, double x, double y, double base, Graphics2D g, Semaphore sem) {
+		this.level = level;
+		this.x = x;
+		this.y = y;
+		this.base = base;
+		this.g = g;
+		this.sem = sem; 
+	}
+	
+	
+	public void run() {
+		FractalGraphics.displayFractals(this.level, this.x, this.y, this.base, this.g, this.sem);
+	
+		try{
+		sem.acquire(); //~sem wait
+		Shared.count ++; //keeps track of number of threads that have accesed the critical section
+		
+		//AREA CALC
+		//  area = (1/2) * base * height; 
+		Shared.avg = Shared.avg + (.5) * this.base* this.base; 
+		//^add all areas then divide by number of threads using 
+	
+		if(Shared.count == 2){
+			double calcVal = Shared.avg / Shared.count;
+			System.out.println("Final Average: " + calcVal ); 
+		}
+		
+		}
+	    catch (InterruptedException exc) {
+         System.out.println(exc);
+        }
+		
+		sem.release(); //~sem post
+		
+		return;
+	}
+	
+}
+
+
+
+
+
